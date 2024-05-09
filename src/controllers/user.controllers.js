@@ -1,64 +1,50 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { apiError } from "../utils/apiError.js";
+import { asyncHandler } from "../utils/AsyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import { apiResonse } from "../utils/apiResponse.js";
-
+import { ApiResponse } from "../utils/ApiResponse.js";
 const registerUser = asyncHandler(async (req, res) => {
-  res.status(200).json({
-    message: "ok",
-  });
-
   // Get user details from frontend
-  // Check if the input fields are empty
-  // Check if the user already exists
-  // Check for cover image and avatar
-  // Upload cover image and avatar on cloudinary
-  // Create user object and insert them in database
-  // Remove password and Token from object
-  // Check for user creation
-  // Get response
-
-  const { username, email, fullName, avatar, coverImage } = req.body;
-  console.log(
-    `*********************************** \n Username: ${username} \n Email: ${email} \n Fullname: ${fullName} \n ***********************************`
-  );
+  const { username, email, fullName, avatar, coverImage, password } = req.body;
 
   // Check if any field is empty
   if (
-    [username, email, fullName, avatar, coverImage].some(
-      (field) => field.trim() === ""
+    [username, email, fullName, password].some(
+      (field) => !field || field.trim() === ""
     )
   ) {
-    throw new apiError(400, "All fields are required");
+    throw new ApiError(400, "All fields are required!!!");
   }
 
   // Check if user already exists
-  const userExist = User.findOne({
+  const userExist = await User.findOne({
     $or: [{ username }, { email }],
   });
 
   if (userExist) {
-    throw new apiError(
+    throw new ApiError(
       409,
-      "User already exist with username or email address"
+      "User already exists with the provided username or email address"
     );
   }
 
-  // Get local file path
-  const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  // Get local file paths
+  const avatarLocalPath = req.files?.avatar?.[0]?.path;
+  const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
 
+  console.log(`AVATAR DATA :::::: ${avatarLocalPath}`);
+  // Check if avatar is uploaded
   if (!avatarLocalPath) {
-    throw new apiError(400, "Avatar is required!");
+    throw new ApiError(400, "Avatar is required!");
   }
 
-  // Upload on cloudinary
-  const Avatar = await uploadOnCloudinary(avatarLocalPath);
-  const CoverImage = await uploadOnCloudinary(coverImageLocalPath);
+  // Upload avatar and cover image on cloudinary
+  const avatarUpload = await uploadOnCloudinary(avatarLocalPath);
+  const coverImageUpload = await uploadOnCloudinary(coverImageLocalPath);
 
-  if (!Avatar) {
-    throw new apiError(400, "Avatar is required!");
+  // Check if avatar upload is successful
+  if (!avatarUpload || !avatarUpload.url) {
+    throw new ApiError(400, "Avatar upload failed");
   }
 
   // Create user
@@ -66,21 +52,27 @@ const registerUser = asyncHandler(async (req, res) => {
     username: username.toLowerCase(),
     fullName,
     email,
-    avatar: Avatar.url,
-    coverImage: CoverImage?.url || "",
+    avatar: avatarUpload.url,
+    coverImage: coverImageUpload?.url || "",
+    password: password,
   });
 
+  // Find user by id and exclude sensitive information
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken -accessToken"
   );
 
   if (!createdUser) {
-    throw new apiError(401, "Something went wrong while registering the user!");
+    throw new ApiError(500, "Failed to create user");
   }
 
-  return res
-    .status(201)
-    .json(new apiResonse(200, createdUser, "User created successfully"));
+  // Respond with success message and user details
+  return res.status(201).json(
+    new ApiResponse(200, {
+      user: createdUser,
+      message: "User created successfully",
+    })
+  );
 });
 
 export { registerUser };

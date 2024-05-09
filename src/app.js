@@ -34,6 +34,6 @@ import userRouter from "./routes/user.routes.js";
 // ROUTES DECLERATION
 app.use("/api/v1/user", userRouter);
 
-// API: https://localhost:3000/api/v1/user/register
+// Register API: http://localhost:3456/api/v1/user/register
 
 export { app };
